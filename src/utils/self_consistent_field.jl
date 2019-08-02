@@ -13,22 +13,22 @@ for diagonalisation. Possible `algorithm`s are `:scf_nlsolve` or `:scf_damped`.
 function self_consistent_field(ham::Hamiltonian, n_bands::Int, n_electrons::Int;
                                ρ=nothing, tol=1e-6,
                                lobpcg_prec=PreconditionerKinetic(ham, α=0.1),
-                               max_iter=100, algorithm=:scf_nlsolve, kwargs...)
+                               max_iter=100, algorithm=:scf_nlsolve, damping=0.2, m=5)
     function compute_occupation(basis, energies, Psi)
         occupation_zero_temperature(basis, energies, Psi, n_electrons)
     end
-    if ρ === nothing
+    if ρ === nothing
         ρ = guess_hcore(ham, n_bands, compute_occupation, lobpcg_prec=lobpcg_prec)
     end
     if algorithm == :scf_nlsolve
-        res = scf_nlsolve(ham, n_bands, compute_occupation, ρ, tol=tol,
-                          lobpcg_prec=lobpcg_prec, max_iter=max_iter; kwargs...)
+        fp_solver = scf_nlsolve_solver(m)
     elseif algorithm == :scf_damped
-        res = scf_damped(ham, n_bands, compute_occupation, ρ, tol=tol,
-                         lobpcg_prec=lobpcg_prec, max_iter=max_iter; kwargs...)
+        fp_solver = scf_damping_solver(damping)
     else
         error("Unknown algorithm " * string(algorithm))
     end
+    res = scf(ham, n_bands, compute_occupation, ρ, fp_solver, tol=tol,
+              lobpcg_prec=lobpcg_prec, max_iter=max_iter)
 
     res
 end
