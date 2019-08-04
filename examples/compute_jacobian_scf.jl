@@ -107,11 +107,23 @@ function jac(f, x, ε)
     J
 end
 
-J = jac(fp_map, foldρ(ρ_eq), sqrt(tol))
+# comment those two lines to redo the analysis
+# J = jac(fp_map, foldρ(ρ_eq), sqrt(tol))
+# Jbak = copy(J)
+
+J = copy(Jbak)
 
 # sort in increasing kinetic energy order
 perm = sortperm(vec([norm(basis.recip_lattice * G) for G in basis_ρ(basis)]))
+J = J[perm,perm]
+
+# There are tons of zero columns and lines; TODO understand that
+using LightGraphs
+comps = connected_components(SimpleGraph((abs.(J) .+ abs.(J')) .> 1e-6))
+@assert count(c -> length(c) > 1, comps) == 1
+i = argmax(length.(comps))
+J = J[comps[i],comps[i]]
 
 using PyPlot
-pcolormesh(log10.(abs.(J[perm,perm])))
+pcolormesh(sqrt.(abs.(J)))
 colorbar()
