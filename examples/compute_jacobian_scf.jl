@@ -14,7 +14,7 @@ plotter = pyimport("pymatgen.electronic_structure.plotter")
 kgrid = [1,1,1]
 Ecut = 3  # Hartree
 n_bands = 8
-tol = 1e-8
+tol = 1e-10
 
 
 #
@@ -57,11 +57,11 @@ ham = Hamiltonian(basis, pot_local=build_local_potential(basis, composition...),
 
 # Build a guess density and run the SCF
 ρ = guess_gaussian_sad(basis, composition...)
-scfres = self_consistent_field(ham, Int(n_electrons / 2 + 2), n_electrons, ρ=ρ, tol=1e-8,
+scfres = self_consistent_field(ham, Int(n_electrons / 2 + 2), n_electrons, ρ=ρ, tol=tol,
                                lobpcg_prec=PreconditionerKinetic(ham, α=0.1))
 ρ_eq = scfres[1]
 
-den_scaling = 0.5
+den_scaling = 0.0
 
 Psi = [Matrix(qr(randn(ComplexF64, length(basis.basis_wf[ik]), n_bands)).Q)
        for ik in 1:length(basis.kpoints)]
@@ -108,3 +108,10 @@ function jac(f, x, ε)
 end
 
 J = jac(fp_map, foldρ(ρ_eq), sqrt(tol))
+
+# sort in increasing kinetic energy order
+perm = sortperm(vec([norm(basis.recip_lattice * G) for G in basis_ρ(basis)]))
+
+using PyPlot
+pcolormesh(log10.(abs.(J[perm,perm])))
+colorbar()
