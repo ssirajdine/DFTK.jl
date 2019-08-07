@@ -26,8 +26,7 @@ function new_density(ham::Hamiltonian, n_bands, compute_occupation, ρ, lobpcg_t
     @assert res.converged
     Psi .= res.X
     occupation = compute_occupation(ham.basis, res.λ, res.X)
-    ρ_new = compute_density(pw, res.X, occupation,
-                            tolerance_orthonormality=100lobpcg_tol)
+    ρ_new = compute_density(pw, res.X, occupation)
 end
 
 # Scaling is from 0 to 1. 0 is density mixing, 1 is "potential mixing"
