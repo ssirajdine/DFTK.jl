@@ -3,7 +3,7 @@
 
 import Base.getproperty, Base.setproperty!, Base.propertynames
 import Base.*, Base.+, Base./
-import Base.eltype
+import Base.eltype, Base.length, Base.size
 
 ## TODO these functions are minimally optimized for the moment
 ## TODO this always allocates both real and fourier parts, which might be a bit wasteful
@@ -28,6 +28,8 @@ mutable struct RealFourierArray{Treal <: Real, T <: Union{Treal, Complex{Treal}}
 end
 # Type of the real part
 Base.eltype(A::RealFourierArray{Treal, T}) where {Treal, T} = T
+Base.length(A::RealFourierArray) = length(A.real)
+Base.size(A::RealFourierArray) = size(A.real)
 
 # Constructors
 RealFourierArray(basis, real, fourier) = RealFourierArray(basis, real, fourier, 2)

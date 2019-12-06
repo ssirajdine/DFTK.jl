@@ -90,6 +90,23 @@ function ScfDiagtol(;ratio_ρdiff=0.2, diagtol_min=nothing, diagtol_max=0.1)
 end
 
 
+function get_mixing_temperature(basis, temperature, εF, eigenvalues, ldos_nos, ldos_maxfactor)
+    factor = 1
+    nos = NOS(εF, basis, eigenvalues, T=temperature)
+    for _ in 1:10
+        nos > ldos_nos && break
+        factor = min(factor * (ldos_nos / nos + 0.01), ldos_maxfactor)
+        nos = NOS(εF, basis, eigenvalues, T=factor * temperature)
+        factor >= ldos_maxfactor && break
+    end
+    if nos < ldos_nos && factor < ldos_maxfactor
+        @warn("Small NOS for LDOS computation", nos,
+              temperature_factor=factor)
+    end
+    (temperature=factor * temperature, nos=nos)
+end
+
+
 """
 Solve the Kohn-Sham equations with a SCF algorithm, starting at ρ.
 """
@@ -132,6 +149,8 @@ function self_consistent_field(basis::PlaneWaveBasis;
     # We do density mixing in the real representation
     # TODO support other mixing types
     function fixpoint_map(x)
+        neval += 1
+
         # Get ρout by diagonalizing the Hamiltonian
         ρin = from_real(basis, x)
 
@@ -153,23 +172,32 @@ function self_consistent_field(basis::PlaneWaveBasis;
 
         # This computes the energy of the new state
         if compute_consistent_energies
-            energies, H = energy_hamiltonian(basis, ψ, occupation;
+            energies, _ = energy_hamiltonian(basis, ψ, occupation;
                                              ρ=ρout, eigenvalues=eigenvalues, εF=εF)
         end
 
-        # mix it with ρin to get a proposal step
+        # Compute ldos if needed ... this kind of a hack for now
+        # should go to the actual mixing routines (or not because this way we can
+        # add it to the info ...)
+        ldos = nothing
+        nos = nothing
         mixing_method = neval <= n_initial ? mixing_initial : mixing
-        ρnext = mix(mixing_method, basis, ρin, ρout, LDOS=ldos)
-
-        if neval <= n_initial
-            ρnext = mix(mixing_initial, basis, ρin, ρout, LDOS=ldos)
-        else
-            ρnext = mix(mixing, basis, ρin, ρout, LDOS=ldos)
+        if isa(mixing_method, HybridMixing) && model.temperature > 0
+            ldos_temperature, nos = get_mixing_temperature(basis, temperature, εF,
+                                                           eigenvalues, ldos_nos,
+                                                           ldos_maxfactor)
+            ldos = LDOS(εF, basis, eigenvalues, ψ, T=ldos_temperature)
         end
 
-        info = (ham=ham, energies=energies, ρin=ρin, ρout=ρout, ρnext=ρnext,
-                eigenvalues=eigenvalues, occupation=occupation, εF=εF, neval=neval, ψ=ψ,
-                diagonalization=nextstate.diagonalization)
+        # mix it with ρin to get a proposal step
+        ρnext = mix(mixing_method, basis, ρin, ρout; LDOS=ldos, ham=ham, ψ=ψ,
+                    eigenvalues=eigenvalues, occupation=occupation, εF=εF,
+                    ldos_temperature=ldos_temperature)
+
+        info = (ham=ham, energies=energies, ρin=ρin, ρout=ρout, ρnext=ρnext, ψ=ψ,
+                eigenvalues=eigenvalues, occupation=occupation, εF=εF, neval=neval,
+                ldos=ldos, nos=nos, diagonalization=nextstate.diagonalization,
+                ldos_temperature=ldos_temperature)
         callback(info)
         is_converged(info) && return x
 
