@@ -9,6 +9,7 @@ using Markdown
 using LinearAlgebra
 using Interpolations
 using Memoization
+using Requires
 
 include("common/asserting.jl")
 include("common/constants.jl")
@@ -159,5 +160,11 @@ include("external/abinit.jl")
 
 export forces
 include("forces.jl")
+
+function __init__()
+    @require CuArrays="3a865a2d-5b23-5a0f-bc46-62713ec82fae" begin
+        include("./eigen/diag_full_gpu.jl")
+    end
+end
 
 end # module DFTK
