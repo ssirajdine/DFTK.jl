@@ -13,7 +13,7 @@ end
 Find the occupation and Fermi level.
 """
 function find_occupation(basis::PlaneWaveBasis{T}, energies) where {T}
-    @assert basis.model.spin_polarisation in (:none, :spinless)
+    @assert basis.model.spin_polarisation in (:none, :spinless, :collinear)
     model = basis.model
     n_electrons = model.n_electrons
     temperature = model.temperature
@@ -31,6 +31,7 @@ function find_occupation(basis::PlaneWaveBasis{T}, energies) where {T}
     compute_n_elec(εF) = sum(basis.kweights .* sum.(compute_occupation(εF)))
 
     # assume that we can get the required number of electrons by filling every state
+    @assert length(basis.kweights) == length(energies)
     @assert filled_occ*sum(basis.kweights .* length.(energies)) ≥ n_electrons - sqrt(eps(T))
 
     # Get rough bounds to bracket εF
@@ -80,7 +81,7 @@ and zero temperature. This function is for DEBUG purposes only, and the
 finite-temperature version with 0 temperature should be preferred.
 """
 function find_occupation_bandgap(basis, energies)
-    @assert basis.model.spin_polarisation in (:none, :spinless)
+    @assert basis.model.spin_polarisation in (:none, :spinless, :collinear)
     n_bands = length(energies[1])
     @assert all(e -> length(e) == n_bands, energies)
     n_electrons = basis.model.n_electrons
