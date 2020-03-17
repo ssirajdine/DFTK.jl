@@ -131,20 +131,25 @@ function PlaneWaveBasis(model::Model{T}, Ecut::Number,
     opIFFT = inv(opFFT)
 
     # Compute default weights if not given
+    if model.spin_polarisation == :collinear
+        append!(ksymops, ksymops)
+    end
     if kweights === nothing
-        #kweights = [length(symops) for symops in ksymops]
+        kweights = [length(symops) for symops in ksymops]
         #kweights should be normalised to 1 or 2 in case of collinear spin? 
-        kweights = Vector{T}()
-        for σ in spin
-            append!(kweights, [length(symops) for symops in ksymops])
-        end
+        #kweights = Vector{T}()
+        #for σ in spin
+        #    append!(kweights, [length(symops) for symops in ksymops])
+        #end
         kweights =  T.(kweights) ./ sum(kweights)
     end
     println("Length of spin array: $(length(spin))")
     println("kweights: $(kweights)")
+    println("Length of kcoords: $(length(kcoords))")
+    println("Length of ksymops: $(length(ksymops))")
 
     # Sanity checks
-    @assert length(kcoords) == length(ksymops)
+    @assert length(kcoords) == length(ksymops)/length(spin)
     @assert length(kcoords) == length(kweights)/length(spin)
     @assert sum(kweights) ≈ 1 "kweights are assumed to be normalized."
     max_E = sum(abs2, model.recip_lattice * floor.(Int, Vec3(fft_size) ./ 2)) / 2

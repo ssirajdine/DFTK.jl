@@ -28,7 +28,7 @@ function run_silicon_redHF_compare(T; Ecut=5, test_tol=1e-6, n_ignored=0, grid_s
 
     n_bands = length(ref_redHF[1])
     fft_size = grid_size * ones(3)
-    Si = Element(silicon.atnum, psp=load_psp(silicon.psp))
+    Si = ElementPsp(silicon.atnum, psp=load_psp(silicon.psp))
     model_none = model_reduced_hf(Array{T}(silicon.lattice), [Si => silicon.positions],
                              temperature=0.05)
     model_collinear = model_reduced_hf(Array{T}(silicon.lattice), [Si => silicon.positions],
@@ -77,25 +77,24 @@ function run_silicon_redHF_none(T; Ecut=5, test_tol=1e-6, n_ignored=0, grid_size
 
     n_bands = length(ref_redHF[1])
     fft_size = grid_size * ones(3)
-    Si = Element(silicon.atnum, psp=load_psp(silicon.psp))
-    model = model_reduced_hf(Array{T}(silicon.lattice), [Si => silicon.positions],
-                             temperature=0.05)
+    Si = ElementPsp(silicon.atnum, psp=load_psp(silicon.psp))
+    model = model_DFT(Array{T}(silicon.lattice), [Si => silicon.positions], [];
+                      temperature=0.05)
     basis = PlaneWaveBasis(model, Ecut, silicon.kcoords, silicon.ksymops; fft_size=fft_size)
-    ham = Hamiltonian(basis, guess_density(basis, [Si => silicon.positions]))
 
-    scfres = self_consistent_field(ham, n_bands, tol=scf_tol)
+    scfres = self_consistent_field(basis, tol=scf_tol, n_bands=n_bands)
 
     for ik in 1:length(silicon.kcoords)
-        @test eltype(scfres.orben[ik]) == T
-        @test eltype(scfres.Psi[ik]) == Complex{T}
-        println(ik, "  ", abs.(ref_redHF[ik] - scfres.orben[ik]))
+        @test eltype(scfres.eigenvalues[ik]) == T
+        @test eltype(scfres.ψ[ik]) == Complex{T}
+        println(ik, "  ", abs.(ref_redHF[ik] - scfres.eigenvalues[ik][1:n_bands]))
     end
     for ik in 1:length(silicon.kcoords)
         # Ignore last few bands, because these eigenvalues are hardest to converge
         # and typically a bit random and unstable in the LOBPCG
-        diff = abs.(ref_redHF[ik] - scfres.orben[ik])
+        diff = abs.(ref_redHF[ik] - scfres.eigenvalues[ik][1:n_bands])
         @test maximum(diff[1:n_bands - n_ignored]) < test_tol
-    end
+    end 
 end
 
 
@@ -121,23 +120,22 @@ function run_silicon_redHF_collinear(T; Ecut=5, test_tol=1e-6, n_ignored=0, grid
 
     n_bands = length(ref_redHF[1])
     fft_size = grid_size * ones(3)
-    Si = Element(silicon.atnum, psp=load_psp(silicon.psp))
-    model_collinear = model_reduced_hf(Array{T}(silicon.lattice), [Si => silicon.positions],
-                              temperature=0.05, spin_polarisation=:collinear)
-    basis_collinear = PlaneWaveBasis(model_collinear, Ecut, silicon.kcoords, silicon.ksymops; fft_size=fft_size)
-    ham_collinear = Hamiltonian(basis_collinear, guess_density(basis_collinear, [Si => silicon.positions]))
+    Si = ElementPsp(silicon.atnum, psp=load_psp(silicon.psp))
+    model = model_DFT(Array{T}(silicon.lattice), [Si => silicon.positions], [];
+                      temperature=0.05, spin_polarisation=:collinear)
+    basis = PlaneWaveBasis(model, Ecut, silicon.kcoords, silicon.ksymops; fft_size=fft_size)
 
-    scfres_collinear = self_consistent_field(ham_collinear, n_bands, tol=scf_tol)
+    scfres = self_consistent_field(basis, tol=scf_tol, n_bands=n_bands)
 
     for ik in 1:length(silicon.kcoords)
-        @test eltype(scfres.orben[ik]) == T
-        @test eltype(scfres.Psi[ik]) == Complex{T}
-        println(ik, "  ", abs.(ref_redHF[ik] - scfres_collinear.orben[ik]))
+        @test eltype(scfres.eigenvalues[ik]) == T
+        @test eltype(scfres.ψ[ik]) == Complex{T}
+        println(ik, "  ", abs.(ref_redHF[ik] - scfres.eigenvalues[ik][1:n_bands]))
     end
     for ik in 1:length(silicon.kcoords)
         # Ignore last few bands, because these eigenvalues are hardest to converge
         # and typically a bit random and unstable in the LOBPCG
-        diff = abs.(ref_redHF[ik] - scfres_collinear.orben[ik])
+        diff = abs.(ref_redHF[ik] - scfres.eigenvalues[ik][1:n_bands])
         @test maximum(diff[1:n_bands - n_ignored]) < test_tol
     end
 end
