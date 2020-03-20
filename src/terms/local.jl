@@ -14,7 +14,10 @@ function ene_ops(term::TermLocalPotential, ψ, occ; kwargs...)
     else
         E = T(Inf)
     end
-
+    #TZS
+    if basis.model.spin_polarisation == :collinear
+        E = E * 2
+    end
     (E=E, ops=ops)
 end
 

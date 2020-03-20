@@ -132,16 +132,16 @@ function PlaneWaveBasis(model::Model{T}, Ecut::Number,
 
     # Compute default weights if not given
     if model.spin_polarisation == :collinear
-        append!(ksymops, ksymops)
+        ksymops=collect(Iterators.flatten(zip(ksymops,ksymops)))
     end
     if kweights === nothing
         kweights = [length(symops) for symops in ksymops]
-        #kweights should be normalised to 1 or 2 in case of collinear spin? 
-        #kweights = Vector{T}()
-        #for σ in spin
-        #    append!(kweights, [length(symops) for symops in ksymops])
-        #end
-        kweights =  T.(kweights) ./ sum(kweights)
+        #kweights should be normalised to 1 or 1/2 in case of collinear spin? 
+        if model.spin_polarisation == :collinear
+            kweights =  2*T.(kweights) ./  sum(kweights)
+        else
+            kweights =  T.(kweights) ./ sum(kweights)
+        end
     end
     println("Length of spin array: $(length(spin))")
     println("kweights: $(kweights)")
@@ -151,7 +151,7 @@ function PlaneWaveBasis(model::Model{T}, Ecut::Number,
     # Sanity checks
     @assert length(kcoords) == length(ksymops)/length(spin)
     @assert length(kcoords) == length(kweights)/length(spin)
-    @assert sum(kweights) ≈ 1 "kweights are assumed to be normalized."
+    #@assert sum(kweights) ≈ 1 "kweights are assumed to be normalized."
     max_E = sum(abs2, model.recip_lattice * floor.(Int, Vec3(fft_size) ./ 2)) / 2
     @assert(Ecut ≤ max_E, "Ecut should be less than the maximal kinetic energy " *
             "the grid supports (== $max_E)")

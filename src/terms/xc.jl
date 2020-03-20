@@ -123,7 +123,7 @@ DOCME compute density in real space and its derivatives starting from Fourier-sp
 """
 function DensityDerivatives(basis, max_derivative::Integer, ρ)
     model = basis.model
-    @assert model.spin_polarisation == :none "Only spin_polarisation == :none implemented."
+    #@assert model.spin_polarisation == :none "Only spin_polarisation == :none implemented."
     function ifft(x)
         tmp = G_to_r(basis, x)
         check_real(tmp)
