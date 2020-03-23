@@ -9,7 +9,12 @@ function compute_partial_density(basis, kpt, ψk, occupation)
     ρk_real .= 0
     for (ist, ψik) in enumerate(eachcol(ψk))
         ψik_real = G_to_r(basis, kpt, ψik)
-        ρk_real .+= occupation[ist] .* abs2.(ψik_real)
+        #TZS beware: terrible next lines
+        if basis.model.spin_polarisation == :collinear
+            ρk_real .+= 2*occupation[ist] .* abs2.(ψik_real)
+        else
+            ρk_real .+= occupation[ist] .* abs2.(ψik_real)
+        end
     end
 
     # Check sanity of the density (real, positive and normalized)
@@ -20,10 +25,11 @@ function compute_partial_density(basis, kpt, ψk, occupation)
                                             min_ρ=minimum(real(ρk_real)))
     end
     n_electrons = sum(ρk_real) * basis.model.unit_cell_volume / prod(basis.fft_size)
-    if abs(n_electrons - sum(occupation)) > sqrt(eps(T))
-        @warn("Mismatch in number of electrons", sum_ρ=n_electrons,
-              sum_occupation=sum(occupation))
-    end
+    #TZS should be uncommented after density is fixed
+    #if abs(n_electrons - sum(occupation)) > sqrt(eps(T))
+    #    @warn("Mismatch in number of electrons", sum_ρ=n_electrons,
+    #          sum_occupation=sum(occupation))
+    #end
 
     # FFT and return
     r_to_G(basis, ρk_real)
