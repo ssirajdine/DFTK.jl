@@ -82,7 +82,7 @@ function run_silicon_redHF_none(T; Ecut=5, test_tol=1e-6, n_ignored=0, grid_size
                       temperature=0.05)
     basis = PlaneWaveBasis(model, Ecut, silicon.kcoords, silicon.ksymops; fft_size=fft_size)
 
-    scfres = self_consistent_field(basis, tol=scf_tol, n_bands=n_bands)
+    scfres = self_consistent_field(basis, max_iter=1, tol=scf_tol, n_bands=n_bands)
 
     for ik in 1:length(silicon.kcoords)
         @test eltype(scfres.eigenvalues[ik]) == T
@@ -125,7 +125,7 @@ function run_silicon_redHF_collinear(T; Ecut=5, test_tol=1e-6, n_ignored=0, grid
                       temperature=0.05, spin_polarisation=:collinear)
     basis = PlaneWaveBasis(model, Ecut, silicon.kcoords, silicon.ksymops; fft_size=fft_size)
 
-    scfres = self_consistent_field(basis, tol=scf_tol, n_bands=n_bands)
+    scfres = self_consistent_field(basis, max_iter=1, tol=scf_tol, n_bands=n_bands)
 
     for ik in 1:length(silicon.kcoords)
         @test eltype(scfres.eigenvalues[ik]) == T
