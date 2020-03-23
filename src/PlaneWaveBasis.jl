@@ -139,10 +139,6 @@ function PlaneWaveBasis(model::Model{T}, Ecut::Number,
         ksymops=collect(Iterators.flatten(zip(ksymops,ksymops)))
         kweights=collect(Iterators.flatten(zip(kweights,kweights)))
     end
-    println("Length of spin array: $(length(spin))")
-    println("kweights: $(kweights)")
-    println("Length of kcoords: $(length(kcoords))")
-    println("Length of ksymops: $(length(ksymops))")
 
     # Sanity checks
     @assert length(kcoords) == length(ksymops)/length(spin)
