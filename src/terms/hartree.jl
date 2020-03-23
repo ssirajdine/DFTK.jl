@@ -34,11 +34,7 @@ function ene_ops(term::TermHartree, ψ, occ; ρ, kwargs...)
     T = eltype(basis)
     pot_fourier = term.poisson_green_coeffs .* ρ.fourier
     potential = real(G_to_r(basis, pot_fourier))  # TODO optimize this
-    if basis.model.spin_polarisation == :collinear
-        E = real(dot(pot_fourier, ρ.fourier) * 2)
-    else
-        E = real(dot(pot_fourier, ρ.fourier) / 2)
-    end
+    E = real(dot(pot_fourier, ρ.fourier) / 2)
 
     ops = [RealSpaceMultiplication(basis, kpoint, potential) for kpoint in basis.kpoints]
     (E=E, ops=ops)
