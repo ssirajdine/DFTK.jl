@@ -131,17 +131,13 @@ function PlaneWaveBasis(model::Model{T}, Ecut::Number,
     opIFFT = inv(opFFT)
 
     # Compute default weights if not given
-    if model.spin_polarisation == :collinear
-        ksymops=collect(Iterators.flatten(zip(ksymops,ksymops)))
-    end
     if kweights === nothing
         kweights = [length(symops) for symops in ksymops]
-        #kweights should be normalised to 1 or 1/2 in case of collinear spin? 
-        if model.spin_polarisation == :collinear
-            kweights =  2*T.(kweights) ./  sum(kweights)
-        else
-            kweights =  T.(kweights) ./ sum(kweights)
-        end
+        kweights =  T.(kweights) ./ sum(kweights)
+    end
+    if model.spin_polarisation == :collinear
+        ksymops=collect(Iterators.flatten(zip(ksymops,ksymops)))
+        kweights=collect(Iterators.flatten(zip(kweights,kweights)))
     end
     println("Length of spin array: $(length(spin))")
     println("kweights: $(kweights)")
