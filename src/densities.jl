@@ -9,12 +9,7 @@ function compute_partial_density(basis, kpt, ψk, occupation)
     ρk_real .= 0
     for (ist, ψik) in enumerate(eachcol(ψk))
         ψik_real = G_to_r(basis, kpt, ψik)
-        #TZS beware: terrible next lines
-        if basis.model.spin_polarisation == :collinear
-            ρk_real .+= 2*occupation[ist] .* abs2.(ψik_real)
-        else
-            ρk_real .+= occupation[ist] .* abs2.(ψik_real)
-        end
+        ρk_real .+= occupation[ist] .* abs2.(ψik_real)
     end
 
     # Check sanity of the density (real, positive and normalized)
@@ -25,11 +20,10 @@ function compute_partial_density(basis, kpt, ψk, occupation)
                                             min_ρ=minimum(real(ρk_real)))
     end
     n_electrons = sum(ρk_real) * basis.model.unit_cell_volume / prod(basis.fft_size)
-    #TZS should be uncommented after density is fixed
-    #if abs(n_electrons - sum(occupation)) > sqrt(eps(T))
-    #    @warn("Mismatch in number of electrons", sum_ρ=n_electrons,
-    #          sum_occupation=sum(occupation))
-    #end
+    if abs(n_electrons - sum(occupation)) > sqrt(eps(T))
+        @warn("Mismatch in number of electrons", sum_ρ=n_electrons,
+              sum_occupation=sum(occupation))
+    end
 
     # FFT and return
     r_to_G(basis, ρk_real)
@@ -83,9 +77,62 @@ function compute_density(basis::PlaneWaveBasis, ψ::AbstractVector,
     end
 
     count = sum(length(basis.ksymops[ik]) for ik in 1:length(basis.kpoints))
+    #corrigated normalization for collinear spin
+    if basis.model.spin_polarisation == :collinear
+        count=count/2
+    end
     from_fourier(basis, sum(ρaccus) / count; assume_real=true)
 end
 
+#computing spin densities, total density and magnetic density
+function compute_spin_densities(basis::PlaneWaveBasis, ψ::AbstractVector,
+                         occupation::AbstractVector)
+    n_k = length(basis.kpoints)/2
+
+    # Sanity checks
+    @assert n_k == length(ψ)/2
+    @assert n_k == length(occupation)/2
+    #for ik in 1:n_k
+    #    @assert length(G_vectors(basis.kpoints[2*ik])) == size(ψ[2*ik], 1)
+    #    @assert length(occupation[2*ik]) == size(ψ[2*ik], 2)
+    #end
+    @assert n_k > 0
+
+    # Allocate an accumulator for ρ in each thread
+    ρaccus_α = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
+    ρaccus_β = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
+
+    kpt_per_thread = [ifelse(i <= n_k, [i], Vector{Int}()) for i in 1:Threads.nthreads()]
+    if n_k >= Threads.nthreads()
+        kblock = floor(Int, n_k / Threads.nthreads())
+        kpt_per_thread = [collect(1:n_k - (Threads.nthreads() - 1) * kblock)]
+        for ithread in 2:Threads.nthreads()
+            push!(kpt_per_thread, kpt_per_thread[end][end] .+ collect(1:kblock))
+        end
+        @assert kpt_per_thread[end][end] == n_k
+    end
+
+    Gs = collect(G_vectors(basis))
+    Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus_α))
+        ρaccu .= 0
+        for ik in ikpts
+            ρα_k = compute_partial_density(basis, basis.kpoints[floor(Int,2*ik-1)], ψ[floor(Int,2*ik-1)], occupation[floor(Int,2*ik-1)])
+            _symmetrize_ρ!(ρaccu, ρα_k, basis, basis.ksymops[floor(Int,2*ik-1)], Gs)
+        end
+    end
+    Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus_β))
+        ρaccu .= 0
+        for ik in ikpts
+            ρβ_k = compute_partial_density(basis, basis.kpoints[floor(Int,2*ik)], ψ[floor(Int,2*ik)], occupation[floor(Int,2*ik)])
+            _symmetrize_ρ!(ρaccu, ρβ_k, basis, basis.ksymops[floor(Int,2*ik)], Gs)
+        end
+    end
+
+    ρ_magnetic=ρaccus_α-ρaccus_β
+    ρ_total=ρaccus_α+ρaccus_β
+    count = sum(length(basis.ksymops[ik]) for ik in 1:length(basis.kpoints))
+    from_fourier(basis, sum(ρ_total) / (count/2); assume_real=true)
+end
 # For a given kpoint, accumulates the symmetrized versions of the
 # density ρin into ρout. No normalization is performed
 function _symmetrize_ρ!(ρaccu, ρin, basis, ksymops, Gs)

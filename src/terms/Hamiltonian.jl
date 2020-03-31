@@ -93,7 +93,7 @@ function energy_hamiltonian(basis::PlaneWaveBasis, ψ, occ; kwargs...)
                             for (hks, kpt) in zip(hks_per_k, basis.kpoints)])
     E = Energies(basis.model.term_types, energies)
     #TZS
-    println("energies: $(E)")
+    #println("energies: $(E)")
     (E=E, H=H)
 end
 function Hamiltonian(basis::PlaneWaveBasis; ψ=nothing, occ=nothing, kwargs...)
