@@ -23,13 +23,9 @@ function next_density(ham::Hamiltonian;
 
     # Update density from new ψ
     occupation, εF = find_occupation(ham.basis, eigres.λ)
-    if  ham.basis.model.spin_polarisation == :collinear
-        ρnew = compute_spin_densities(ham.basis, eigres.X, occupation)
-    else
-        ρnew = compute_density(ham.basis, eigres.X, occupation)
-    end
+    (ρnew,ρspinnew) = compute_spin_densities(ham.basis, eigres.X, occupation)
+    merge((ψ=eigres.X, eigenvalues=eigres.λ, occupation=occupation, εF=εF), (ρ=ρnew,ρspin=ρspinnew))
 
-    (ψ=eigres.X, eigenvalues=eigres.λ, occupation=occupation, εF=εF, ρ=ρnew)
 end
 
 function scf_default_callback(info)

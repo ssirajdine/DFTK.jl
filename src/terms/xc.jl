@@ -17,7 +17,7 @@ struct XcTerm <: Term
     functionals::Vector{Functional}
 end
 
-function ene_ops(term::XcTerm, ψ, occ; ρ, kwargs...)
+function ene_ops(term::XcTerm, ψ, occ; ρ, ρspin, kwargs...)
     basis = term.basis
 
     T = eltype(basis)
@@ -25,7 +25,11 @@ function ene_ops(term::XcTerm, ψ, occ; ρ, kwargs...)
 
     # Take derivatives of the density if needed.
     max_ρ_derivs = any(xc.family == Libxc.family_gga for xc in term.functionals) ? 1 : 0
-    density = DensityDerivatives(basis, max_ρ_derivs, ρ)
+    if model.spin_polarisation == :collinear
+        density = DensityDerivatives(basis, max_ρ_derivs, ρspin)
+    else
+        density = DensityDerivatives(basis, max_ρ_derivs, ρ)
+    end
 
     # Initialisation
     potential = zeros(T, basis.fft_size)

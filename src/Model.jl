@@ -25,6 +25,7 @@ struct Model{T <: Real}
     #                 αβ, βα, αα, ββ all nonzero, different
     #     :spinless   No spin at all ("spinless fermions", "mathematicians' electrons").
     #                 Difference with :none is that the occupations are 1 instead of 2
+    #n_spin::Int # number of spins
     spin_polarisation::Symbol  # :none, :collinear, :full, :spinless
 
     # If temperature=0, no fractional occupations are used.
@@ -138,4 +139,18 @@ function filled_occupation(model)
         filled_occ = 1
     end
     filled_occ
+end
+
+
+"""
+Number of spins
+"""
+function number_of_spins(model)
+    @assert model.spin_polarisation in (:none, :spinless, :collinear)
+    if model.spin_polarisation == :collinear
+        n_spin = 2
+    else
+        n_spin = 1
+    end
+    n_spin
 end

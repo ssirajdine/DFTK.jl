@@ -78,29 +78,27 @@ function compute_density(basis::PlaneWaveBasis, ψ::AbstractVector,
 
     count = sum(length(basis.ksymops[ik]) for ik in 1:length(basis.kpoints))
     #corrigated normalization for collinear spin
-    if basis.model.spin_polarisation == :collinear
-        count=count/2
-    end
+    n_spin=number_of_spins(basis.model)
+    count=count/n_spin
     from_fourier(basis, sum(ρaccus) / count; assume_real=true)
 end
 
 #computing spin densities, total density and magnetic density
 function compute_spin_densities(basis::PlaneWaveBasis, ψ::AbstractVector,
                          occupation::AbstractVector)
-    n_k = length(basis.kpoints)/2
 
+    n_spin=number_of_spins(basis.model)
+    n_k = floor(Int, length(basis.kpoints)/n_spin)
+    println("number of spins: $n_spin" )
     # Sanity checks
-    @assert n_k == length(ψ)/2
-    @assert n_k == length(occupation)/2
+    @assert n_k == length(ψ)/n_spin
+    @assert n_k == length(occupation)/n_spin
     #for ik in 1:n_k
-    #    @assert length(G_vectors(basis.kpoints[2*ik])) == size(ψ[2*ik], 1)
-    #    @assert length(occupation[2*ik]) == size(ψ[2*ik], 2)
+    #    @assert length(G_vectors(basis.kpoints[n_spin*ik])) == size(ψ[n_spin*ik], 1)
+    #    @assert length(occupation[n_spin*ik]) == size(ψ[n_spin*ik], 2)
     #end
     @assert n_k > 0
 
-    # Allocate an accumulator for ρ in each thread
-    ρaccus_α = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
-    ρaccus_β = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
 
     kpt_per_thread = [ifelse(i <= n_k, [i], Vector{Int}()) for i in 1:Threads.nthreads()]
     if n_k >= Threads.nthreads()
@@ -113,26 +111,55 @@ function compute_spin_densities(basis::PlaneWaveBasis, ψ::AbstractVector,
     end
 
     Gs = collect(G_vectors(basis))
-    Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus_α))
-        ρaccu .= 0
-        for ik in ikpts
-            ρα_k = compute_partial_density(basis, basis.kpoints[floor(Int,2*ik-1)], ψ[floor(Int,2*ik-1)], occupation[floor(Int,2*ik-1)])
-            _symmetrize_ρ!(ρaccu, ρα_k, basis, basis.ksymops[floor(Int,2*ik-1)], Gs)
+    ρspin=0.
+    if n_spin == 2   
+        # Allocate an accumulator for ρ in each thread
+        ρaccus_α = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
+        ρaccus_β = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
+        Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus_α))
+            ρaccu .= 0
+            for ik in ikpts
+                ρα_k = compute_partial_density(basis, basis.kpoints[floor(Int,2*ik-1)], ψ[floor(Int,2*ik-1)], occupation[floor(Int,2*ik-1)])
+                _symmetrize_ρ!(ρaccu, ρα_k, basis, basis.ksymops[floor(Int,2*ik-1)], Gs)
+            end
         end
-    end
-    Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus_β))
-        ρaccu .= 0
-        for ik in ikpts
-            ρβ_k = compute_partial_density(basis, basis.kpoints[floor(Int,2*ik)], ψ[floor(Int,2*ik)], occupation[floor(Int,2*ik)])
-            _symmetrize_ρ!(ρaccu, ρβ_k, basis, basis.ksymops[floor(Int,2*ik)], Gs)
+        Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus_β))
+            ρaccu .= 0
+            for ik in ikpts
+                ρβ_k = compute_partial_density(basis, basis.kpoints[floor(Int,2*ik)], ψ[floor(Int,2*ik)], occupation[floor(Int,2*ik)])
+                _symmetrize_ρ!(ρaccu, ρβ_k, basis, basis.ksymops[floor(Int,2*ik)], Gs)
+            end
         end
-    end
 
-    ρ_magnetic=ρaccus_α-ρaccus_β
-    ρ_total=ρaccus_α+ρaccus_β
-    count = sum(length(basis.ksymops[ik]) for ik in 1:length(basis.kpoints))
-    from_fourier(basis, sum(ρ_total) / (count/2); assume_real=true)
+        ρ_magnetic=ρaccus_α-ρaccus_β
+        ρ_total=ρaccus_α+ρaccus_β
+        count = sum(length(basis.ksymops[ik]) for ik in 1:length(basis.kpoints))
+        ρtot=from_fourier(basis, sum(ρ_total) / (count/n_spin); assume_real=true)
+	ρspinaccus=collect(Iterators.flatten(zip(ρaccus_α,ρaccus_β)))
+        ρspin=from_fourier(basis, sum(ρspinaccus) / (count/n_spin); assume_real=true)
+        #ρdiff=from_fourier(basis, sum(ρ_magnetic) / (count/n_spin); assume_real=true)
+        #ρα=from_fourier(basis, sum(ρaccus_α) / (count/n_spin); assume_real=true)
+        #ρβ=from_fourier(basis, sum(ρaccus_β) / (count/n_spin); assume_real=true)
+	#ρspin=collect(Iterators.flatten(zip(ρα,ρβ)))
+        (ρtot,ρspin)			      
+    else
+        ρaccus = [similar(ψ[1][:, 1], basis.fft_size) for ithread in 1:Threads.nthreads()]
+        Threads.@threads for (ikpts, ρaccu) in collect(zip(kpt_per_thread, ρaccus))
+            ρaccu .= 0
+            for ik in ikpts
+                ρ_k = compute_partial_density(basis, basis.kpoints[ik], ψ[ik], occupation[ik])
+                _symmetrize_ρ!(ρaccu, ρ_k, basis, basis.ksymops[ik], Gs)
+            end
+        end
+        ρ_total=ρaccus
+        count = sum(length(basis.ksymops[ik]) for ik in 1:length(basis.kpoints))
+        ρtot=from_fourier(basis, sum(ρ_total) / (count/n_spin); assume_real=true)
+        (ρtot)			      
+        (ρtot,ρspin)			      
+    end
 end
+
+
 # For a given kpoint, accumulates the symmetrized versions of the
 # density ρin into ρout. No normalization is performed
 function _symmetrize_ρ!(ρaccu, ρin, basis, ksymops, Gs)
