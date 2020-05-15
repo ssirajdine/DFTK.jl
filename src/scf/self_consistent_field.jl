@@ -182,7 +182,7 @@ function self_consistent_field(basis::PlaneWaveBasis;
         ldos = nothing
         nos = nothing
         mixing_method = neval <= n_initial ? mixing_initial : mixing
-        if isa(mixing_method, HybridMixing) && model.temperature > 0
+        if (isa(mixing, HybridMixing) || isa(mixing, χ0Mixing)) && model.temperature > 0
             ldos_temperature, nos = get_mixing_temperature(basis, temperature, εF,
                                                            eigenvalues, ldos_nos,
                                                            ldos_maxfactor)

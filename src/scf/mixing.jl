@@ -50,12 +50,15 @@ function mix(m::SimpleMixing, basis, ρin::RealFourierArray, ρout::RealFourierA
 end
 
 struct HybridMixing
-    α          # Damping parameter
-    ldos_nos   # Minimal NOS value in for LDOS computation
+    α               # Damping parameter
+    ldos_nos        # Minimal NOS value in for LDOS computation
     ldos_maxfactor  # Maximal factor between electron temperature and LDOS temperature
-    G_blur     # Width of Gaussian filter applied to LDOS in reciprocal space.
+    G_blur          # Width of Gaussian filter applied to LDOS in reciprocal space.
 end
-HybridMixing(α=1; ldos_nos=20, ldos_maxfactor=10, G_blur=Inf) = HybridMixing(α, ldos_nos, ldos_maxfactor, G_blur)
+function HybridMixing(α=1; ldos_nos=20, ldos_maxfactor=10, G_blur=Inf)
+    HybridMixing(α, ldos_nos, ldos_maxfactor, G_blur)
+end
+
 function mix(m::HybridMixing, basis, ρin::RealFourierArray, ρout::RealFourierArray;
              LDOS=nothing, kwargs...)
     LDOS === nothing && return ρin + m.α * (ρout - ρin)  # Fallback to simple mixing
@@ -82,16 +85,53 @@ function mix(m::HybridMixing, basis, ρin::RealFourierArray, ρout::RealFourierA
         den_fourier = from_real(basis, den).fourier  # TODO r_to_G ??
         pot_fourier = 4π ./ Gsq .* den_fourier
         pot_real = from_fourier(basis, pot_fourier).real  # TODO G_to_r ??
+
+        # apply χ0
         den_real = real(LDOS .* pot_real - sum(LDOS .* pot_real) .* LDOS ./ sum(LDOS))
         vec(den + den_real)
+    end
+    J = LinearMap(Jop, length(ρin))
+    x = gmres(J, ΔF)
+    Δρ = devec(x)
+    from_real(basis, real(ρin.real + m.α * Δρ))
+end
 
-        # # χ0inp = LDOS .* inp
-        # χ0inp = LDOS .* inp
-        # χ0inp_four = from_real(basis, χ0inp).fourier
-        # Gsq[1] = Inf # Don't act on DC
-        # vcχ0inp_four = 4π ./ Gsq .* χ0inp_four
-        # vcχ0inp_real = from_fourier(basis, vcχ0inp_four).real
-        # vec(inp + vcχ0inp_real)
+struct χ0Mixing
+    α               # Damping parameter
+    ldos_nos        # Minimal NOS value in for LDOS computation
+    ldos_maxfactor  # Maximal factor between electron temperature and LDOS temperature
+    droptol         # Tolerance for dropping contributions in χ0
+    sternheimer_contribution  # Use Sternheimer for contributions of unoccupied orbitals
+end
+function χ0Mixing(α=1; ldos_nos=20, ldos_maxfactor=10, droptol=Inf, sternheimer_contribution=false)
+    χ0Mixing(α, ldos_nos, ldos_maxfactor, droptol, sternheimer_contribution)
+end
+
+function mix(m::χ0Mixing, basis, ρin::RealFourierArray, ρout::RealFourierArray;
+             LDOS, ham, ψ, occupation, εF, eigenvalues, temperature)
+    # TODO Duplicate code with HybridMixing
+    #
+    # F : ρin -> ρout has derivative χ0 vc
+    # a Newton step would be ρn+1 = ρn + (1 -χ0 vc)^-1 (F(ρn) - ρn)
+    # We approximate -χ0 by a real-space multiplication by LDOS
+    # We want to solve J Δρ = ΔF with J = (1 - χ0 vc)
+    ΔF = ρout.real - ρin.real
+    devec(x) = reshape(x, size(ρin))
+    function Jop(x)
+        den = devec(x)
+        Gsq = [sum(abs2, basis.model.recip_lattice * G)
+               for G in G_vectors(basis)]
+        Gsq[1] = Inf # Don't act on DC
+        den_fourier = from_real(basis, den).fourier  # TODO r_to_G ??
+        pot_fourier = 4π ./ Gsq .* den_fourier
+        pot_real = from_fourier(basis, pot_fourier).real  # TODO G_to_r ??
+
+        # apply χ0
+        den_real = apply_χ0(ham, real(pot_real), ψ, occupation, εF, eigenvalues;
+                            droptol=m.droptol,
+                            sternheimer_contribution=m.sternheimer_contribution,
+                            temperature=temperature)
+        vec(den - den_real)
     end
     J = LinearMap(Jop, length(ρin))
     x = gmres(J, ΔF)
